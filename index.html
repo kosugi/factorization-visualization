@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <title>Factorization Visualization</title>
+    <style>
+* { width: 100%; height: 100%; margin: 0px; padding: 0px; overflow: hidden; }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script src="factorization.js"></script>
+    <script src="model.js"></script>
+    <script src="color.js"></script>
+    <script src="url.js"></script>
+    <script>
+var timer_id;
+jQuery.noConflict();
+jQuery(function($) {
+
+    var normdeg = function(v) {
+        return ((v % 360) + 360) % 360;
+    };
+    var deg2rad = function(v) {
+        return v * Math.PI / 180;
+    };
+    var rad2deg = function(v) {
+        return v * 180 / Math.PI;
+    };
+    var vect2deg = function(x, y) {
+        var degc = rad2deg(Math.acos(x));
+        var degs = rad2deg(Math.asin(y));
+        return (0 <= degs)? degc: (360 - degc);
+    };
+
+
+    var expression = function(c, xs) {
+        var len = xs.length;
+        var s = c + ' = ';
+        if (len == 1 && 1 < c) {
+            return s + 'prime';
+        }
+        for (var n = 0; n < len; ++n) {
+            if (0 < n) {
+                s += ' × ';
+            }
+            s += '' + xs[n];
+        }
+        return s;
+    };
+
+    var fillArc = function(x, y, r) {
+        var d = Math.sqrt(x * x + y * y);
+        if (d < 1) d = inner_scale;
+
+        var scale = w / inner_scale;
+        var x0 = cr1 * Math.cos(deg2rad(ct1)) + (x / d) * cr2;
+        var y0 = cr1 * Math.sin(deg2rad(ct1)) + (y / d) * cr2;
+        var r0 = Math.sqrt(x0 * x0 + y0 * y0);
+        var t = vect2deg(x0, y0);
+        //console.log('(' + x + ', ' + y + '): (' + x0 + ', ' + y0 + '): r0 = ' + r0 + ', t0 = ' + t0);
+        ctx.fillStyle = Color.fromHSV(t, r0, 0.7);
+        ctx.beginPath();
+        ctx.arc(scale * x, scale * y, scale * r, 0, Math.PI * 2, true);
+        ctx.fill();
+    };
+
+    var drawBase = function() {
+        ctx.fillStyle = '#EEE';
+        ctx.fillRect(-(canvas.width / 2), -(canvas.height / 2), canvas.width, canvas.height);
+    };
+
+    var drawExpression = function(c, xs) {
+        var s = expression(c, xs);
+        ctx.font = '16px monospace';
+        ctx.lineWidth = 0.1;
+        ctx.strokeStyle = '#CCC';
+        ctx.fillStyle = '#333';
+        ctx.strokeText(s, -(canvas.width / 2) + 8, -(canvas.height / 2) + 24);
+        ctx.fillText(s, -(canvas.width / 2) + 8, -(canvas.height / 2) + 24);
+    };
+
+    var $win = $(window);
+    var onResize = function() {
+        var ww = ~1 & $win.width();
+        var wh = ~1 & $win.height();
+        var size = Math.min(ww, wh);
+        w = size / 2;
+        canvas.width = ww;
+        canvas.height = wh;
+        ctx.setTransform(1, 0, 0, 1, ww / 2, wh / 2);
+    };
+    $win.resize(onResize);
+
+    var params = URL.parseQuery(location.search);
+    var canvas = $('#canvas').get(0);
+    var ctx = canvas.getContext('2d');
+    var w;
+
+    var ct1 = 10 + normdeg(parseInt(params.ct, 10)|0); // 色空間の中心を示す角度
+    var cr1 = 0.8; // 色空間の中心を示す原点からの半径
+    var cr2 = 0.1; // 色空間の中心からの内円の半径
+
+    var ps = [];
+    var qs = [];
+    var xs = [];
+    var speed = 40;
+    var frame_count = 0;
+    var inner_scale = 100;
+    var c = -1 + parseInt(params.c, 10)|0;
+    if (c < 0) c = 0;
+
+    var onEnterFrame = function()
+    {
+        var step = frame_count % speed;
+        if (step === 0) {
+            qs = ps;
+            if (1 < qs.length) qs.push(qs[qs.length - 1]);
+            xs = Factorization.factorize(++c);
+            var ys = xs.slice(0);
+            var num_ys = ys.length;
+            // 4 で纏められる箇所を纏める
+            var p = 0;
+            while (ys[p] === 2 && p < num_ys) ++p;
+            while (1 < p) {
+                ys = ys.slice(1);
+                p -= 2;
+                ys[p] = 4;
+            }
+            ps = Model.points(ys, inner_scale * 0.95);
+        }
+
+        drawBase();
+        var rate = step * 4 / speed;
+        if (1 < rate) rate = 1;
+        for (var n = 0, len = ps.length; n < len; ++n) {
+            if (qs[n] == null) {
+                fillArc(ps[n].x * rate, ps[n].y * rate, ps[n].r * rate);
+            }
+            else {
+                var x = qs[n].x + (ps[n].x - qs[n].x) * rate;
+                var y = qs[n].y + (ps[n].y - qs[n].y) * rate;
+                var r = qs[n].r + (ps[n].r - qs[n].r) * rate;
+                fillArc(x, y, r);
+            }
+        }
+        drawExpression(c, xs);
+        //ct1 = normdeg(ct1 + 1);
+        ++frame_count;
+    };
+    timer_id = setInterval(onEnterFrame, 50);
+    onResize();
+    onEnterFrame();
+});
+    </script>
+    <style>
+    </style>
+  </head>
+  <body>
+    <canvas id="canvas"></canvas>
+  </body>
+</html>
